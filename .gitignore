@@ -1,8 +1,38 @@
+# Maven & Build output
 target/
 *.class
+.mvn/wrapper/maven-wrapper.jar
+*.log
+
+# Maven settings & credentials (prevent credential leaks)
+settings.xml
+**/settings.xml
+!settings.xml.example
+!settings.xml.template
+
+# GPG keys & certificates
+*.asc
+*.gpg
+secring.*
+pubring.*
+*.key
+private-key.*
+
+# Environment variables & secrets
+.env
+.env.local
+.env.*.local
+.env.*
+!.env.example
+
+# IDEs & Editors
+.idea/
+*.iml
+.vscode/
 .settings/
 .project
 .classpath
-.idea/
-*.iml
+
+# OS files
 .DS_Store
+Thumbs.db

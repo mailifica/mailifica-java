@@ -1,0 +1,109 @@
+# ==============================================================================
+# GitHub Actions Workflow: Publish to Maven Central Portal
+# ==============================================================================
+#
+# Before running this workflow, register the following secrets in:
+# GitHub Repository -> Settings -> Secrets and variables -> Actions:
+#
+# 1. CENTRAL_TOKEN_USERNAME:
+#    Username generated on https://central.sonatype.com (Account -> Generate User Token)
+# 2. CENTRAL_TOKEN_PASSWORD:
+#    Password token generated on https://central.sonatype.com (Account -> Generate User Token)
+# 3. GPG_PRIVATE_KEY:
+#    Exported ASCII-armored private GPG key (gpg --armor --export-secret-keys <KEY_ID>)
+# 4. GPG_PASSPHRASE:
+#    Passphrase used to unlock the GPG private key
+# 5. GPG_KEY_ID (Optional/Reference):
+#    Key ID used for signing artifacts (e.g. 8 or 16-character hex ID)
+# 6. GPG_KEY_FINGERPRINT (Optional/Reference):
+#    Full fingerprint of the GPG key
+# ==============================================================================
+
+name: Publish to Maven Central
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Build, Sign and Publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Validate Required Secrets
+        run: |
+          MISSING_SECRETS=()
+          [ -z "$CENTRAL_TOKEN_USERNAME" ] && MISSING_SECRETS+=("CENTRAL_TOKEN_USERNAME")
+          [ -z "$CENTRAL_TOKEN_PASSWORD" ] && MISSING_SECRETS+=("CENTRAL_TOKEN_PASSWORD")
+          [ -z "$GPG_PRIVATE_KEY" ] && MISSING_SECRETS+=("GPG_PRIVATE_KEY")
+          [ -z "$GPG_PASSPHRASE" ] && MISSING_SECRETS+=("GPG_PASSPHRASE")
+
+          if [ ${#MISSING_SECRETS[@]} -ne 0 ]; then
+            echo "::error::Missing required repository secret(s): ${MISSING_SECRETS[*]}"
+            echo "Please configure the missing secret(s) in: Settings -> Secrets and variables -> Actions"
+            exit 1
+          fi
+          echo "All required secrets are configured."
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Set up JDK 11 (Eclipse Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Import GPG Private Key
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --import
+          echo "GPG private key imported successfully."
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+
+      - name: Configure Maven settings.xml
+        run: |
+          mkdir -p ~/.m2
+          cat <<EOF > ~/.m2/settings.xml
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd">
+              <servers>
+                  <server>
+                      <id>central</id>
+                      <username>${CENTRAL_TOKEN_USERNAME}</username>
+                      <password>${CENTRAL_TOKEN_PASSWORD}</password>
+                  </server>
+              </servers>
+              <profiles>
+                  <profile>
+                      <id>gpg-configuration</id>
+                      <properties>
+                          <gpg.passphrase>${GPG_PASSPHRASE}</gpg.passphrase>
+                      </properties>
+                  </profile>
+              </profiles>
+              <activeProfiles>
+                  <activeProfile>gpg-configuration</activeProfile>
+              </activeProfiles>
+          </settings>
+          EOF
+          chmod 600 ~/.m2/settings.xml
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Build, Test, Sign and Deploy to Maven Central
+        run: mvn clean deploy --batch-mode -DskipTests=false
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
