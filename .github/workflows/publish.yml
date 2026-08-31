@@ -104,6 +104,6 @@ jobs:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Build, Test, Sign and Deploy to Maven Central
-        run: mvn clean deploy --batch-mode -DskipTests=false
+        run: mvn clean deploy --batch-mode -DskipTests=false -Dgpg.passphrase="${GPG_PASSPHRASE}"
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
