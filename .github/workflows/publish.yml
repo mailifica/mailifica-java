@@ -23,6 +23,8 @@ name: Publish to Maven Central
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*.*.*'
   workflow_dispatch:
